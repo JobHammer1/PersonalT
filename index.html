@@ -1,12 +1,77 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Personal Trainer</title>
 </head>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        max-width: 400px;
+        margin: auto;
+        padding: 20px;
+        background: #f9f9f9;
+        text-align: center;
+    }
+
+    h1 {
+        color: #2c3e50;
+    }
+
+    button {
+        padding: 10px 20px;
+        font-size: 16px;
+        background-color: #27ae60;
+        border: none;
+        color: white;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-top: 15px;
+    }
+
+    button:hover {
+        background-color: #2ecc71;
+    }
+
+    select {
+        font-size: 16px;
+        padding: 5px;
+        margin: 10px 5px;
+        border-radius: 4px;
+    }
+
+    #canvas {
+        border: 2px solid #2c3e50;
+        border-radius: 8px;
+        margin-top: 15px;
+    }
+
+    #feedback {
+        margin-top: 15px;
+        font-weight: bold;
+        font-size: 18px;
+        min-height: 24px;
+    }
+</style>
+
 <body>
     <h1>AI Personal Trainer</h1>
+    <label for="training-time">Trainingsduur (seconden):</label>
+    <select id="training-time">
+        <option value="15">15</option>
+        <option value="30" selected>30</option>
+        <option value="60">60</option>
+    </select>
+
+    <label for="training-sets">Aantal sets:</label>
+    <select id="training-sets">
+        <option value="1" selected>1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+    </select>
+
     <button type="button" onclick="startWorkout()">Start</button>
     <div><canvas id="canvas"></canvas></div>
     <p>Tijd over: <span id="timer">30</span> seconden</p>
@@ -26,11 +91,22 @@
         let interval;
         let isCounting = false;
         const canvasSize = 300;
+        let totalSets = 1;
+        let currentSet = 0;
+        let trainingTime = 30;
+
 
         async function startWorkout() {
+            // Lees geselecteerde waarden
+            trainingTime = parseInt(document.getElementById("training-time").value);
+            totalSets = parseInt(document.getElementById("training-sets").value);
+            currentSet = 1;
+            repCounter = 0;
+
             await init(); // camera en model laden
-            startTimer(); // start de timer
+            startTimer();
         }
+
 
         async function init() {
             const modelURL = URL + "model.json";
@@ -56,16 +132,54 @@
                 labelContainer.appendChild(document.createElement("div"));
             }
         }
+        function getFeedback(reps) {
+            if (reps >= 30) {
+                return "Uitstekend gedaan! Je hebt echt veel squats gedaan. Houd die energie vast!";
+            } else if (reps >= 20) {
+                return "Goed bezig! Je hebt een mooi aantal reps gehaald. Probeer het de volgende keer nog iets harder!";
+            } else if (reps >= 10) {
+                return "Redelijk resultaat. Blijf oefenen en focus ook op je techniek.";
+            } else if (reps > 0) {
+                return "Weinig reps. Probeer wat rustiger aan te doen en de juiste houding te pakken.";
+            } else {
+                return "Je hebt geen squats gedaan. Probeer de oefening goed uit te voeren voor het beste resultaat.";
+            }
+        }
+        function updateTimer() {
+            if (timer > 0) {
+                timer--;
+                document.getElementById("timer").innerText = timer;
+            } else {
+                isCounting = false;
+                clearInterval(interval);
+
+                // Feedback per set
+                document.getElementById("feedback").innerText = `Set ${currentSet} klaar! Je deed ${repCounter} reps.`;
+
+                if (currentSet < totalSets) {
+                    currentSet++;
+                    repCounter = 0;
+                    setTimeout(() => {
+                        document.getElementById("feedback").innerText = `Start volgende set ${currentSet} van ${totalSets}...`;
+                        startTimer();
+                    }, 3000); // 3 seconden pauze tussen sets
+                } else {
+                    document.getElementById("feedback").innerText = `Training klaar! In totaal deed je ${repCounter} reps over ${totalSets} sets.`;
+                }
+            }
+        }
+
+
 
         function startTimer() {
-            timer = 30;
-            repCounter = 0;
-            isCounting = true;
+            timer = trainingTime;
             document.getElementById("timer").innerText = timer;
             document.getElementById("rep-counter").innerText = repCounter;
-            document.getElementById("feedback").innerText = "";
+            document.getElementById("feedback").innerText = `Set ${currentSet} van ${totalSets} gestart!`;
+            isCounting = true;
             interval = setInterval(updateTimer, 1000);
         }
+
 
         function updateTimer() {
             if (timer > 0) {
@@ -74,7 +188,7 @@
             } else {
                 isCounting = false;
                 clearInterval(interval);
-                document.getElementById("feedback").innerText = `Klaar! Je hebt ${repCounter} squats gedaan.`;
+                document.getElementById("feedback").innerText = getFeedback(repCounter);
             }
         }
 
@@ -94,7 +208,7 @@
             }
 
             // hoogste voorspelling zoeken
-            let highest = prediction.reduce((prev, current) => 
+            let highest = prediction.reduce((prev, current) =>
                 (prev.probability > current.probability) ? prev : current
             );
 
@@ -121,4 +235,5 @@
         }
     </script>
 </body>
+
 </html>
