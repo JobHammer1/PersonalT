@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Personal Trainer</title>
+</head>
+<body>
+    <h1>AI Personal Trainer</h1>
+    <button type="button" onclick="startWorkout()">Start</button>
+    <div><canvas id="canvas"></canvas></div>
+    <p>Tijd over: <span id="timer">30</span> seconden</p>
+    <p>Reps: <span id="rep-counter">0</span></p>
+    <p id="feedback"></p>
+    <div id="label-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+
+    <script type="text/javascript">
+        const URL = "./my_model/";
+        let model, webcam, ctx, labelContainer, maxPredictions;
+        let repCounter = 0;
+        let lastPose = "";
+        let timer = 30;
+        let interval;
+        let isCounting = false;
+        const canvasSize = 300;
+
+        async function startWorkout() {
+            await init(); // camera en model laden
+            startTimer(); // start de timer
+        }
+
+        async function init() {
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            model = await tmPose.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            webcam = new tmPose.Webcam(canvasSize, canvasSize, true);
+            await webcam.setup();
+            await webcam.play();
+
+            window.requestAnimationFrame(loop);
+
+            const canvas = document.getElementById("canvas");
+            canvas.width = canvasSize;
+            canvas.height = canvasSize;
+            ctx = canvas.getContext("2d");
+
+            labelContainer = document.getElementById("label-container");
+            labelContainer.innerHTML = ""; // reset labels
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
+
+        function startTimer() {
+            timer = 30;
+            repCounter = 0;
+            isCounting = true;
+            document.getElementById("timer").innerText = timer;
+            document.getElementById("rep-counter").innerText = repCounter;
+            document.getElementById("feedback").innerText = "";
+            interval = setInterval(updateTimer, 1000);
+        }
+
+        function updateTimer() {
+            if (timer > 0) {
+                timer--;
+                document.getElementById("timer").innerText = timer;
+            } else {
+                isCounting = false;
+                clearInterval(interval);
+                document.getElementById("feedback").innerText = `Klaar! Je hebt ${repCounter} squats gedaan.`;
+            }
+        }
+
+        async function loop() {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+            const prediction = await model.predict(posenetOutput);
+
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction = prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+
+            // hoogste voorspelling zoeken
+            let highest = prediction.reduce((prev, current) => 
+                (prev.probability > current.probability) ? prev : current
+            );
+
+            if (isCounting) {
+                if (highest.className === "Squad" && lastPose === "Staan") {
+                    repCounter++;
+                    document.getElementById("rep-counter").innerText = repCounter;
+                }
+                lastPose = highest.className;
+            }
+
+            drawPose(pose);
+        }
+
+        function drawPose(pose) {
+            if (webcam.canvas) {
+                ctx.drawImage(webcam.canvas, 0, 0);
+                if (pose) {
+                    const minConfidence = 0.5;
+                    tmPose.drawKeypoints(pose.keypoints, minConfidence, ctx);
+                    tmPose.drawSkeleton(pose.keypoints, minConfidence, ctx);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
